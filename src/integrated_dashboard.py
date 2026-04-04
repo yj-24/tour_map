@@ -163,9 +163,9 @@ ITINERARY_DATA = {
         "📍 **04:00 PM** - 액티비티가 어우러진 복합 문화 공간에서 에너지 충전 <br> (Recharge energy at complex cultural spaces with activities)"
     ],
     '홍콩': [
-        "📍 **11:00 AM** - 올인원 멀티밤 구매 후 동대문 복합 쇼핑 타워 정복 <br> (Conquer Dongdaemun shopping towers with all-in-one balm)",
-        "📍 **01:00 PM** - 짧은 시간 내에 고효율로 즐기는 공연 혹은 미디어 아트 관람 <br> (Enjoy high-efficiency performances or media art)",
-        "📍 **04:00 PM** - 환급 키오스크에서 세금 환급 후 청계천 밤도깨비 야시장 산책 <br> (Walk along Cheonggyecheon after tax refund at a kiosk)"
+        "📍 **11:00 AM** - 올인원 멀티밤 구매 후 동대문 복합 쇼핑 타워 정복",
+        "📍 **01:00 PM** - 짧은 시간 내에 고효율로 즐기는 공연 혹은 미디어 아트 관람",
+        "📍 **04:00 PM** - 환급 키오스크에서 세금 환급 후 청계천 밤도깨비 야시장 산책"
     ]
 }
 
@@ -182,7 +182,7 @@ SEOUL_DISTRICTS = [
     "관악구 (Gwanak-gu)", "광진구 (Gwangjin-gu)", "구로구 (Guro-gu)", "금천구 (Geumcheon-gu)",
     "노원구 (Nowon-gu)", "도봉구 (Dobong-gu)", "동대문구 (Dongdaemun-gu)", "동작구 (Dongjak-gu)",
     "마포구 (Mapo-gu)", "서대문구 (Seodaemun-gu)", "서초구 (Seocho-gu)", "성동구 (Seongdong-gu)",
-    "성북구 (Seongbuk-gu)", "송파구 (Songpa-gu)", "양천구 (Yangcheon-gu)", "영등포구 (Yeongdeungpo-gu)",
+    "성북구 (Seong북-gu)", "송파구 (Songpa-gu)", "양천구 (Yangcheon-gu)", "영등포구 (Yeongdeungpo-gu)",
     "용산구 (Yongsan-gu)", "은평구 (Eunpyeong-gu)", "종로구 (Jongno-gu)", "중구 (Jung-gu)", "중랑구 (Jungnang-gu)"
 ]
 
@@ -195,33 +195,42 @@ def render_folium_map_persona(locations, stores=None, height=650, level=12, cent
     markers_js, list_items_html, stores_js = "", "", ""
     valid_locs = [l for l in locations if l['lat'] and l['lng']]
         
+    # 1. Add Tour Spots
     for i, loc in enumerate(valid_locs):
         cong_lvl = loc.get('congestion_lvl', '정보없음')
         s_name = str(loc['name']).replace("'", "`")
-        s_category = str(loc.get('category', '')).replace("'", "`")
         
-        markers_js += f"{{ title: '{s_name}', pos: [{loc['lat']}, {loc['lng']}], congestion: '{cong_lvl}' }},"
+        markers_js += f"{{ type: 'tour', title: '{s_name}', pos: [{loc['lat']}, {loc['lng']}], congestion: '{cong_lvl}' }},"
         
         cong_colors = {"여유": "#2ecc71", "보통": "#f1c40f", "약간 붐빔": "#e67e22", "붐빔": "#e74c3c", "정보없음": "#95a5a6"}
         badge_color = cong_colors.get(cong_lvl, "#95a5a6")
         
         list_items_html += f"""
-            <div class="list-item" onclick="focusMarker({i})" id="item-{i}" style="padding: 12px 15px; border-bottom: 1px solid #eee; cursor:pointer;">
+            <div class="list-item tour-item" onclick="focusMarker({i})" id="item-{i}" style="padding: 12px 15px; border-bottom: 1px solid #eee; cursor:pointer;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div style="font-size: 14px; font-weight: 600;">{loc['name']}</div>
-                    <span style="font-size: 10px; padding: 2px 6px; background: {badge_color}; color: white; border-radius: 10px;">{cong_lvl}</span>
+                    <div style="font-size: 13px; font-weight: 700;">{loc['name']}</div>
+                    <span style="font-size: 9px; padding: 2px 5px; background: {badge_color}; color: white; border-radius: 8px;">{cong_lvl}</span>
                 </div>
-                <div style="font-size: 12px; color: #888; margin-top: 4px;">[{loc.get('district', '')}] {loc.get('category', '')}</div>
+                <div style="font-size: 11px; color: #636e72; margin-top: 3px;">📍 {loc.get('category', '관광지')}</div>
             </div>"""
 
+    # 2. Add Stores
+    start_idx_stores = len(valid_locs)
     if stores:
-        for s in stores:
+        for i, s in enumerate(stores):
             try:
                 lat, lng = float(s['위도']), float(s['경도'])
                 if pd.notna(lat) and pd.notna(lng):
                     brand = 'oliveyoung' if 'olive' in str(s['메이커명']).lower() else 'daiso'
                     name = str(s['매장명']).replace("'", "`")
-                    stores_js += f"{{ title: '{name}', pos: [{lat}, {lng}], brand: '{brand}' }},"
+                    stores_js += f"{{ type: 'store', title: '{name}', pos: [{lat}, {lng}], brand: '{brand}' }},"
+                    
+                    brand_color = "#339af0" if brand == 'oliveyoung' else "#ff6b6b"
+                    list_items_html += f"""
+                        <div class="list-item store-item" onclick="focusMarker({start_idx_stores + i})" id="item-{start_idx_stores + i}" style="padding: 12px 15px; border-bottom: 1px solid #eee; cursor:pointer; border-left: 4px solid {brand_color};">
+                            <div style="font-size: 13px; font-weight: 700;">[{brand.upper()}] {name}</div>
+                            <div style="font-size: 11px; color: #636e72; margin-top: 3px;">💄 K-Beauty Shopping</div>
+                        </div>"""
             except: continue
 
     html_code = f"""
@@ -229,21 +238,21 @@ def render_folium_map_persona(locations, stores=None, height=650, level=12, cent
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         .list-item:hover {{ background: #f8f9fa; }}
-        .active-item {{ background: #e7f5ff !important; border-left: 4px solid #339af0; }}
+        .active-item {{ background: #e7f5ff !important; }}
         ::-webkit-scrollbar {{ width: 6px; }}
         ::-webkit-scrollbar-thumb {{ background: #ccc; border-radius: 10px; }}
     </style>
     
     <div style="display: flex; width: 100%; height: {height}px; font-family: 'Pretendard', sans-serif; border: 1px solid #ddd; border-radius: 12px; overflow: hidden; background: #fff;">
         <div style="width: 300px; height: 100%; overflow-y: auto; background: #fff; border-right: 1px solid #ddd;" id="sidebar">
-            <div style="padding: 10px; background: #f1f3f5; font-size: 11px; color: #495057; font-weight: 700;">추천 관광지 ({len(valid_locs)})</div>
+            <div style="padding: 10px; background: #f1f3f5; font-size: 11px; color: #495057; font-weight: 700;">추천 장소 ({len(valid_locs) + (len(stores) if stores is not None else 0)})</div>
             {list_items_html}
         </div>
         <div id="map" style="flex: 1; height: 100%;"></div>
     </div>
     
     <script>
-        var map, markers = [], popups = [];
+        var map, markers = [];
         var ICON_URLS = {{ 
             '여유': 'https://maps.google.com/mapfiles/ms/icons/green-dot.png', 
             '보통': 'https://maps.google.com/mapfiles/ms/icons/yellow-dot.png', 
@@ -256,18 +265,17 @@ def render_folium_map_persona(locations, stores=None, height=650, level=12, cent
 
         function initMap() {{
             map = L.map('map').setView([{center_lat}, {center_lng}], {level});
-            L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
-                attribution: '&copy; OpenStreetMap'
-            }}).addTo(map);
+            L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{ attribution: '&copy; OpenStreetMap' }}).addTo(map);
 
             var positions = [{markers_js}];
+            var stores = [{stores_js}];
             var group = new L.featureGroup();
 
-            // 1. Tour Markers
+            // 1. Add Tour Markers
             positions.forEach(function(p, i) {{
                 var icon = L.icon({{ iconUrl: ICON_URLS[p.congestion] || ICON_URLS['정보없음'], iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -32] }});
                 var marker = L.marker(p.pos, {{ icon: icon, title: p.title }}).addTo(map);
-                var content = '<div style="padding:5px;min-width:150px;font-family:pretendard;"><b>' + p.title + '</b><br><span style="color:#e74c3c;font-size:11px;">여긴 어때? (추천 관광지)</span><br><span style="color:#666;font-size:11px;">혼잡도: ' + p.congestion + '</span></div>';
+                var content = '<div style="padding:5px;min-width:150px;font-family:pretendard;"><b>' + p.title + '</b><br><span style="color:#e74c3c;font-size:11px;">실시간 혼잡도: ' + p.congestion + '</span></div>';
                 marker.bindPopup(content);
                 markers.push(marker);
                 group.addLayer(marker);
@@ -472,8 +480,9 @@ def main():
             if d_name != "전체":
                 df_rec_gu = df_rec[df_rec['시/군/구'].astype(str).str.contains(d_name, na=False)]
                 if not df_rec_gu.empty: df_rec = df_rec_gu
-                # Filter stores by current district
+                # Filter stores by current district (Fallback to all stores if none in district)
                 df_stores_filtered = df_stores[df_stores['주소'].str.contains(d_name, na=False)] if not df_stores.empty else df_stores
+                if df_stores_filtered.empty: df_stores_filtered = df_stores
             else:
                 df_stores_filtered = df_stores
                 
@@ -497,7 +506,7 @@ def main():
                     st.markdown(f"<div style='margin-bottom:12px; font-size:15px; color:#2d3436;'>{step}</div>", unsafe_allow_html=True)
                 
                 st.markdown("---")
-                st.info(f"💡 위 코스는 현재 '{d_name}' 지역의 특성과 {persona} 페르소나의 성향을 고려하여 설계되었습니다. (This course is designed considering your persona preference.)")
+                st.info(f"💡 위 코스는 현재 '{d_name}' 지역의 특성과 당신의 라이프스타일 성향을 고려하여 설계되었습니다. (This course is designed considering your lifestyle preference.)")
 
     with t_home:
         f1, f2 = st.columns(2)
