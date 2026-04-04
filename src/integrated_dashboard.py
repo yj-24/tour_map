@@ -281,11 +281,11 @@ def render_folium_map_persona(locations, stores=None, height=650, level=12, cent
 # B) Unified Map Renderer (General Tourist Map) - Using Folium
 def render_map_unified(locations, stores=None, center=(37.5665, 126.9780), zoom=7, height=450):
     m = folium.Map(location=center, zoom_start=zoom, control_scale=True)
-    icons = {{
+    icons = {
         'tour': 'https://maps.google.com/mapfiles/ms/icons/green-dot.png',
         'oliveyoung': 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
         'daiso': 'https://maps.google.com/mapfiles/ms/icons/red-dot.png'
-    }}
+    }
     for loc in locations:
         try:
             lat, lng = float(loc['lat']), float(loc['lng'])
