@@ -9,6 +9,8 @@ import xml.etree.ElementTree as ET
 from urllib.parse import urlparse, parse_qs
 import streamlit.components.v1 as components
 import re
+import folium
+from folium import CustomIcon
 
 # --- 1. Page Configuration & Env ---
 st.set_page_config(page_title="Integrated K-Beauty Tour Dashboard", layout="wide", initial_sidebar_state="expanded")
@@ -17,11 +19,8 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOUR_DATA_DIR = os.path.join(BASE_DIR, 'data')
 TOUR_IMG_DIR = os.path.join(BASE_DIR, 'images')
 
-KAKAO_JS_API_KEY = st.secrets.get("KAKAO_JS_API_KEY", os.getenv("KAKAO_JS_API_KEY", ""))
+# KAKAO_JS_API_KEY = st.secrets.get("KAKAO_JS_API_KEY", os.getenv("KAKAO_JS_API_KEY", "")) # No longer needed for maps
 SEOUL_CITY_DATA_API_KEY = st.secrets.get("SEOUL_CITY_DATA_API_KEY", os.getenv("SEOUL_CITY_DATA_API_KEY", ""))
-
-if not KAKAO_JS_API_KEY:
-    st.error("🔑 KAKAO_JS_API_KEY is missing! Please add it to your Streamlit Secrets.")
 
 # --- 2. Styling (Unified) ---
 def inject_custom_css():
@@ -154,8 +153,8 @@ SEOUL_DISTRICTS = [
 
 
 # --- 5. Map Renderers ---
-# A) Persona Map Renderer (with left List view)
-def render_kakao_map_persona(locations, height=650, level=8, center_lat=37.5665, center_lng=126.9780):
+# A) Persona Map Renderer (with left List view) - Using Leaflet instead of Kakao
+def render_folium_map_persona(locations, height=650, level=12, center_lat=37.5665, center_lng=126.9780):
     if not locations: return st.warning("지도에 표시할 추천 장소가 없습니다.")
 
     markers_js, list_items_html = "", ""
@@ -167,7 +166,7 @@ def render_kakao_map_persona(locations, height=650, level=8, center_lat=37.5665,
         s_category = str(loc.get('category', '')).replace("'", "`")
         s_district = str(loc.get('district', '')).replace("'", "`")
         
-        markers_js += f"{{ title: '{s_name}', latlng: new kakao.maps.LatLng({loc['lat']}, {loc['lng']}), category: '{s_category}', district: '{s_district}', congestion: '{cong_lvl}' }},"
+        markers_js += f"{{ title: '{s_name}', pos: [{loc['lat']}, {loc['lng']}], category: '{s_category}', district: '{s_district}', congestion: '{cong_lvl}' }},"
         
         cong_colors = {"여유": "#2ecc71", "보통": "#f1c40f", "약간 붐빔": "#e67e22", "붐빔": "#e74c3c", "정보없음": "#95a5a6"}
         badge_color = cong_colors.get(cong_lvl, "#95a5a6")
@@ -182,65 +181,94 @@ def render_kakao_map_persona(locations, height=650, level=8, center_lat=37.5665,
             </div>"""
 
     html_code = f"""
-    <head><meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests"></head>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        .list-item:hover {{ background: #f8f9fa; }}
+        .active-item {{ background: #e7f5ff !important; border-left: 4px solid #339af0; }}
+        ::-webkit-scrollbar {{ width: 6px; }}
+        ::-webkit-scrollbar-thumb {{ background: #ccc; border-radius: 10px; }}
+    </style>
+    
     <div style="display: flex; width: 100%; height: {height}px; font-family: 'Pretendard', sans-serif; border: 1px solid #ddd; border-radius: 12px; overflow: hidden; background: #fff;">
-        <div style="width: 300px; height: 100%; overflow-y: auto; background: #fff; border-right: 1px solid #ddd;">
+        <div style="width: 300px; height: 100%; overflow-y: auto; background: #fff; border-right: 1px solid #ddd;" id="sidebar">
             {list_items_html}
         </div>
         <div id="map" style="flex: 1; height: 100%;"></div>
     </div>
     
-    <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey={KAKAO_JS_API_KEY}&autoload=false"></script>
     <script>
-        var map, markers = [], infowindows = [];
-        var ICON_URLS = {{ '여유': 'http://maps.google.com/mapfiles/ms/icons/green-dot.png', '보통': 'http://maps.google.com/mapfiles/ms/icons/yellow-dot.png', '약간 붐빔': 'http://maps.google.com/mapfiles/ms/icons/orange-dot.png', '붐빔': 'http://maps.google.com/mapfiles/ms/icons/red-dot.png', '정보없음': 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png' }};
+        var map, markers = [], popups = [];
+        var ICON_URLS = {{ 
+            '여유': 'https://maps.google.com/mapfiles/ms/icons/green-dot.png', 
+            '보통': 'https://maps.google.com/mapfiles/ms/icons/yellow-dot.png', 
+            '약간 붐빔': 'https://maps.google.com/mapfiles/ms/icons/orange-dot.png', 
+            '붐빔': 'https://maps.google.com/mapfiles/ms/icons/red-dot.png', 
+            '정보없음': 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png' 
+        }};
 
         function initMap() {{
-            var mapContainer = document.getElementById('map');
-            var mapOption = {{ center: new kakao.maps.LatLng({center_lat}, {center_lng}), level: {level} }};
-            map = new kakao.maps.Map(mapContainer, mapOption); 
-            var positions = [{markers_js}];
+            map = L.map('map').setView([{center_lat}, {center_lng}], {level});
+            L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
+                attribution: '&copy; OpenStreetMap'
+            }}).addTo(map);
 
-            var bounds = new kakao.maps.LatLngBounds();
-            for (var i = 0; i < positions.length; i++) {{
-                var marker = new kakao.maps.Marker({{ map: map, position: positions[i].latlng, title: positions[i].title, image: new kakao.maps.MarkerImage(ICON_URLS[positions[i].congestion] || ICON_URLS['정보없음'], new kakao.maps.Size(32, 32)) }});
-                var content = '<div style="padding:10px;min-width:180px;font-size:12px;border:none;"><b>' + positions[i].title + '</b><br><span style="color:#e74c3c;">혼잡도: ' + positions[i].congestion + '</span></div>';
-                var infowindow = new kakao.maps.InfoWindow({{ content: content }});
-                markers.push(marker); infowindows.push(infowindow);
-                bounds.extend(positions[i].latlng);
+            var positions = [{markers_js}];
+            var group = new L.featureGroup();
+
+            positions.forEach(function(p, i) {{
+                var icon = L.icon({{ iconUrl: ICON_URLS[p.congestion] || ICON_URLS['정보없음'], iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -32] }});
+                var marker = L.marker(p.pos, {{ icon: icon, title: p.title }}).addTo(map);
                 
-                (function(m, info, idx) {{
-                    kakao.maps.event.addListener(m, 'click', function() {{ focusMarker(idx); }});
-                    kakao.maps.event.addListener(m, 'mouseover', function() {{ info.open(map, m); }});
-                    kakao.maps.event.addListener(m, 'mouseout', function() {{ info.close(); }});
-                }})(marker, infowindow, i);
-            }}
-            if(positions.length > 0) {{ map.setBounds(bounds); }}
+                var content = '<div style="padding:5px;min-width:150px;font-family:pretendard;"><b>' + p.title + '</b><br><span style="color:#e74c3c;font-size:11px;">혼잡도: ' + p.congestion + '</span></div>';
+                marker.bindPopup(content);
+                
+                markers.push(marker);
+                group.addLayer(marker);
+
+                marker.on('mouseover', function(e) {{ this.openPopup(); }});
+                marker.on('click', function(e) {{ focusMarker(i); }});
+            }});
+
+            if(positions.length > 0) {{ map.fitBounds(group.getBounds().pad(0.1)); }}
         }}
 
         function focusMarker(idx) {{
-            for (var i = 0; i < markers.length; i++) {{ infowindows[i].close(); document.getElementById('item-'+i).style.background = '#fff'; }}
-            infowindows[idx].open(map, markers[idx]);
-            map.setCenter(markers[idx].getPosition());
-            map.setLevel(4);
-            document.getElementById('item-'+idx).style.background = '#e7f5ff';
-            document.getElementById('item-'+idx).scrollIntoView({{behavior:'smooth', block:'nearest'}});
+            markers.forEach((m, i) => {{
+                document.getElementById('item-'+i).classList.remove('active-item');
+            }});
+            
+            var m = markers[idx];
+            map.setView(m.getLatLng(), 15);
+            m.openPopup();
+            
+            var item = document.getElementById('item-'+idx);
+            item.classList.add('active-item');
+            item.scrollIntoView({{ behavior: 'smooth', block: 'nearest' }});
         }}
 
-        if (typeof kakao !== 'undefined') kakao.maps.load(initMap);
+        initMap();
     </script>
     """
     components.html(html_code, height=height + 20)
 
-# B) Unified Map Renderer (General Tourist Map)
+# B) Unified Map Renderer (General Tourist Map) - Using Folium
 def render_map_unified(locations, stores=None, center=(37.5665, 126.9780), zoom=7, height=450):
-    if not KAKAO_JS_API_KEY: return
-    markers = []
+    m = folium.Map(location=center, zoom_start=zoom, control_scale=True)
+    
+    icons = {
+        'tour': 'https://maps.google.com/mapfiles/ms/icons/green-dot.png',
+        'oliveyoung': 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
+        'daiso': 'https://maps.google.com/mapfiles/ms/icons/red-dot.png'
+    }
+
     for loc in locations:
         try:
             lat, lng = float(loc['lat']), float(loc['lng'])
             if not pd.isna(lat) and not pd.isna(lng):
-                markers.append({'lat': lat, 'lng': lng, 'title': f"{loc['name']} {f'[{loc.get('lvl', '정보없음')}]' if 'lvl' in loc else ''}", 'type': 'tour'})
+                title = f"{loc['name']} {f'[{loc.get('lvl', '정보없음')}]' if 'lvl' in loc else ''}"
+                icon = CustomIcon(icons['tour'], icon_size=(32, 32), icon_anchor=(16, 32), popup_anchor=(0, -32))
+                folium.Marker([lat, lng], tooltip=title, icon=icon, popup=folium.Popup(f'<div style="white-space:nowrap;">{title}</div>')).add_to(m)
         except: continue
 
     if stores:
@@ -248,40 +276,12 @@ def render_map_unified(locations, stores=None, center=(37.5665, 126.9780), zoom=
             try:
                 lat, lng = float(s['위도']), float(s['경도'])
                 if not pd.isna(lat) and not pd.isna(lng):
-                    markers.append({'lat': lat, 'lng': lng, 'title': s['매장명'], 'type': str(s['메이커명']).lower()})
+                    ctype = 'oliveyoung' if 'oliveyoung' in str(s['메이커명']).lower() else 'daiso'
+                    icon = CustomIcon(icons[ctype], icon_size=(32, 32), icon_anchor=(16, 32), popup_anchor=(0, -32))
+                    folium.Marker([lat, lng], tooltip=s['매장명'], icon=icon, popup=folium.Popup(f'<div style="white-space:nowrap;">{s["매장명"]}</div>')).add_to(m)
             except: continue
 
-    positions_json = json.dumps(markers, ensure_ascii=False)
-
-    html = f"""
-    <head><meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests"></head>
-    <div id="map" style="width: 100%; height: {height}px; border-radius: 15px; border: 1px solid #ddd;"></div>
-    <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey={KAKAO_JS_API_KEY}&autoload=false"></script>
-    <script>
-        (function() {{
-            const POSITIONS = {positions_json};
-            const icons = {{
-                tour: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png',
-                oliveyoung: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
-                daiso: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png'
-            }};
-            function initHandler() {{
-                const map = new kakao.maps.Map(document.getElementById('map'), {{ center: new kakao.maps.LatLng({center[0]}, {center[1]}), level: {zoom} }});
-                POSITIONS.forEach(p => {{
-                    let ctype = 'tour';
-                    if (p.type.includes('oliveyoung')) ctype = 'oliveyoung'; else if (p.type.includes('daiso')) ctype = 'daiso';
-                    const marker = new kakao.maps.Marker({{ map: map, position: new kakao.maps.LatLng(p.lat, p.lng), image: new kakao.maps.MarkerImage(icons[ctype] || icons.tour, new kakao.maps.Size(32, 32)) }});
-                    const iw = new kakao.maps.InfoWindow({{ content: `<div style="padding:5px;font-size:12px;white-space:nowrap;">${{p.title}}</div>` }});
-                    kakao.maps.event.addListener(marker, 'click', () => {{ map.setCenter(marker.getPosition()); map.setLevel(4); }});
-                    kakao.maps.event.addListener(marker, 'mouseover', () => iw.open(map, marker));
-                    kakao.maps.event.addListener(marker, 'mouseout', () => iw.close());
-                }});
-            }}
-            if (typeof kakao !== 'undefined') kakao.maps.load(initHandler);
-        }})();
-    </script>
-    """
-    components.html(html, height=height)
+    components.html(m._repr_html_(), height=height)
 
 
 # --- MAIN APP LOGIC ---
@@ -419,7 +419,7 @@ def main():
                     })
                 
                 st.markdown(f"**라이프스타일 맞춤 관광지 {len(map_data)}곳**")
-                render_kakao_map_persona(map_data)
+                render_folium_map_persona(map_data)
 
             # Itinerary
             st.markdown("<br><h3>🗓️ Recommended Half-Day Itinerary</h3>", unsafe_allow_html=True)
