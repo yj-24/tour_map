@@ -19,7 +19,6 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOUR_DATA_DIR = os.path.join(BASE_DIR, 'data')
 TOUR_IMG_DIR = os.path.join(BASE_DIR, 'images')
 
-# KAKAO_JS_API_KEY = st.secrets.get("KAKAO_JS_API_KEY", os.getenv("KAKAO_JS_API_KEY", "")) # No longer needed for maps
 SEOUL_CITY_DATA_API_KEY = st.secrets.get("SEOUL_CITY_DATA_API_KEY", os.getenv("SEOUL_CITY_DATA_API_KEY", ""))
 
 # --- 2. Styling (Unified) ---
@@ -142,6 +141,14 @@ PERSONA_INFO = {
     '홍콩': ('멀티태스킹 케어파 (Multitasking Care) ⚡', '단 하나로 장벽/톤업/자외선 차단을 마스터하는 극강의 효율.')
 }
 
+PERSONA_PRODUCTS = {
+    '중국': ["리쥬란 앰플", "메디큐브 뷰티 디바이스", "고기능 브라이트닝 세럼"],
+    '일본': ["아누아 어성초 토너", "토리든 다이브인 세럼", "라운드랩 보습 크림"],
+    '대만': ["마녀공장 클렌징 오일", "비플레인 녹두 클렌징폼", "쿨링 패드"],
+    '미국': ["바이오던스 콜라겐 마스크", "넘버즈인 글루타치온 세럼", "브라이트닝 앰플"],
+    '홍콩': ["에스트라 아토베리어 365 크림", "라로슈포제 선크림", "바이오더마 클렌징 제품"]
+}
+
 SEOUL_DISTRICTS = [
     "전체 (All)", "강남구 (Gangnam-gu)", "강동구 (Gangdong-gu)", "강북구 (Gangbuk-gu)", "강서구 (Gangseo-gu)",
     "관악구 (Gwanak-gu)", "광진구 (Gwangjin-gu)", "구로구 (Guro-gu)", "금천구 (Geumcheon-gu)",
@@ -153,20 +160,19 @@ SEOUL_DISTRICTS = [
 
 
 # --- 5. Map Renderers ---
-# A) Persona Map Renderer (with left List view) - Using Leaflet instead of Kakao
-def render_folium_map_persona(locations, height=650, level=12, center_lat=37.5665, center_lng=126.9780):
+# A) Persona Map Renderer (with left List view) - Using Leaflet
+def render_folium_map_persona(locations, stores=None, height=650, level=12, center_lat=37.5665, center_lng=126.9780):
     if not locations: return st.warning("지도에 표시할 추천 장소가 없습니다.")
 
-    markers_js, list_items_html = "", ""
+    markers_js, list_items_html, stores_js = "", "", ""
     valid_locs = [l for l in locations if l['lat'] and l['lng']]
         
     for i, loc in enumerate(valid_locs):
         cong_lvl = loc.get('congestion_lvl', '정보없음')
         s_name = str(loc['name']).replace("'", "`")
         s_category = str(loc.get('category', '')).replace("'", "`")
-        s_district = str(loc.get('district', '')).replace("'", "`")
         
-        markers_js += f"{{ title: '{s_name}', pos: [{loc['lat']}, {loc['lng']}], category: '{s_category}', district: '{s_district}', congestion: '{cong_lvl}' }},"
+        markers_js += f"{{ title: '{s_name}', pos: [{loc['lat']}, {loc['lng']}], congestion: '{cong_lvl}' }},"
         
         cong_colors = {"여유": "#2ecc71", "보통": "#f1c40f", "약간 붐빔": "#e67e22", "붐빔": "#e74c3c", "정보없음": "#95a5a6"}
         badge_color = cong_colors.get(cong_lvl, "#95a5a6")
@@ -180,6 +186,16 @@ def render_folium_map_persona(locations, height=650, level=12, center_lat=37.566
                 <div style="font-size: 12px; color: #888; margin-top: 4px;">[{loc.get('district', '')}] {loc.get('category', '')}</div>
             </div>"""
 
+    if stores:
+        for s in stores:
+            try:
+                lat, lng = float(s['위도']), float(s['경도'])
+                if pd.notna(lat) and pd.notna(lng):
+                    brand = 'oliveyoung' if 'olive' in str(s['메이커명']).lower() else 'daiso'
+                    name = str(s['매장명']).replace("'", "`")
+                    stores_js += f"{{ title: '{name}', pos: [{lat}, {lng}], brand: '{brand}' }},"
+            except: continue
+
     html_code = f"""
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -192,6 +208,7 @@ def render_folium_map_persona(locations, height=650, level=12, center_lat=37.566
     
     <div style="display: flex; width: 100%; height: {height}px; font-family: 'Pretendard', sans-serif; border: 1px solid #ddd; border-radius: 12px; overflow: hidden; background: #fff;">
         <div style="width: 300px; height: 100%; overflow-y: auto; background: #fff; border-right: 1px solid #ddd;" id="sidebar">
+            <div style="padding: 10px; background: #f1f3f5; font-size: 11px; color: #495057; font-weight: 700;">추천 관광지 ({len(valid_locs)})</div>
             {list_items_html}
         </div>
         <div id="map" style="flex: 1; height: 100%;"></div>
@@ -204,7 +221,9 @@ def render_folium_map_persona(locations, height=650, level=12, center_lat=37.566
             '보통': 'https://maps.google.com/mapfiles/ms/icons/yellow-dot.png', 
             '약간 붐빔': 'https://maps.google.com/mapfiles/ms/icons/orange-dot.png', 
             '붐빔': 'https://maps.google.com/mapfiles/ms/icons/red-dot.png', 
-            '정보없음': 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png' 
+            '정보없음': 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
+            'oliveyoung': 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
+            'daiso': 'https://maps.google.com/mapfiles/ms/icons/red-dot.png'
         }};
 
         function initMap() {{
@@ -216,18 +235,27 @@ def render_folium_map_persona(locations, height=650, level=12, center_lat=37.566
             var positions = [{markers_js}];
             var group = new L.featureGroup();
 
+            // 1. Tour Markers
             positions.forEach(function(p, i) {{
                 var icon = L.icon({{ iconUrl: ICON_URLS[p.congestion] || ICON_URLS['정보없음'], iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -32] }});
                 var marker = L.marker(p.pos, {{ icon: icon, title: p.title }}).addTo(map);
-                
-                var content = '<div style="padding:5px;min-width:150px;font-family:pretendard;"><b>' + p.title + '</b><br><span style="color:#e74c3c;font-size:11px;">혼잡도: ' + p.congestion + '</span></div>';
+                var content = '<div style="padding:5px;min-width:150px;font-family:pretendard;"><b>' + p.title + '</b><br><span style="color:#e74c3c;font-size:11px;">여긴 어때? (추천 관광지)</span><br><span style="color:#666;font-size:11px;">혼잡도: ' + p.congestion + '</span></div>';
                 marker.bindPopup(content);
-                
                 markers.push(marker);
                 group.addLayer(marker);
-
                 marker.on('mouseover', function(e) {{ this.openPopup(); }});
                 marker.on('click', function(e) {{ focusMarker(i); }});
+            }});
+
+            // 2. Store Markers
+            var stores = [{stores_js}];
+            stores.forEach(function(s) {{
+                var icon = L.icon({{ iconUrl: ICON_URLS[s.brand] || ICON_URLS['정보없음'], iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -32] }});
+                var marker = L.marker(s.pos, {{ icon: icon, title: s.title }}).addTo(map);
+                var content = '<div style="padding:5px;min-width:150px;font-family:pretendard;"><b>[' + s.brand.toUpperCase() + '] ' + s.title + '</b><br><span style="color:#00b894;font-size:11px;">K-뷰티 쇼핑은 여기서!</span></div>';
+                marker.bindPopup(content);
+                group.addLayer(marker);
+                marker.on('mouseover', function(e) {{ this.openPopup(); }});
             }});
 
             if(positions.length > 0) {{ map.fitBounds(group.getBounds().pad(0.1)); }}
@@ -237,11 +265,9 @@ def render_folium_map_persona(locations, height=650, level=12, center_lat=37.566
             markers.forEach((m, i) => {{
                 document.getElementById('item-'+i).classList.remove('active-item');
             }});
-            
             var m = markers[idx];
             map.setView(m.getLatLng(), 15);
             m.openPopup();
-            
             var item = document.getElementById('item-'+idx);
             item.classList.add('active-item');
             item.scrollIntoView({{ behavior: 'smooth', block: 'nearest' }});
@@ -255,13 +281,11 @@ def render_folium_map_persona(locations, height=650, level=12, center_lat=37.566
 # B) Unified Map Renderer (General Tourist Map) - Using Folium
 def render_map_unified(locations, stores=None, center=(37.5665, 126.9780), zoom=7, height=450):
     m = folium.Map(location=center, zoom_start=zoom, control_scale=True)
-    
-    icons = {
+    icons = {{
         'tour': 'https://maps.google.com/mapfiles/ms/icons/green-dot.png',
         'oliveyoung': 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
         'daiso': 'https://maps.google.com/mapfiles/ms/icons/red-dot.png'
-    }
-
+    }}
     for loc in locations:
         try:
             lat, lng = float(loc['lat']), float(loc['lng'])
@@ -270,27 +294,23 @@ def render_map_unified(locations, stores=None, center=(37.5665, 126.9780), zoom=
                 icon = CustomIcon(icons['tour'], icon_size=(32, 32), icon_anchor=(16, 32), popup_anchor=(0, -32))
                 folium.Marker([lat, lng], tooltip=title, icon=icon, popup=folium.Popup(f'<div style="white-space:nowrap;">{title}</div>')).add_to(m)
         except: continue
-
     if stores:
         for s in stores:
             try:
                 lat, lng = float(s['위도']), float(s['경도'])
                 if not pd.isna(lat) and not pd.isna(lng):
-                    ctype = 'oliveyoung' if 'oliveyoung' in str(s['메이커명']).lower() else 'daiso'
+                    ctype = 'oliveyoung' if 'olive' in str(s['메이커명']).lower() else 'daiso'
                     icon = CustomIcon(icons[ctype], icon_size=(32, 32), icon_anchor=(16, 32), popup_anchor=(0, -32))
                     folium.Marker([lat, lng], tooltip=s['매장명'], icon=icon, popup=folium.Popup(f'<div style="white-space:nowrap;">{s["매장명"]}</div>')).add_to(m)
             except: continue
-
     components.html(m._repr_html_(), height=height)
 
 
 # --- MAIN APP LOGIC ---
 def main():
     inject_custom_css()
-    
     st.markdown("""<div style="margin-bottom: 20px;"><a href="/" style="text-decoration: none; color: #F93780; font-size: 26px; font-weight: 800;">Integrated K-Beauty MAP</a></div>""", unsafe_allow_html=True)
     
-    # Session State Init
     if 'oy_more' not in st.session_state: st.session_state.oy_more = False
     if 'daiso_more' not in st.session_state: st.session_state.daiso_more = False
     if 'map_center' not in st.session_state: st.session_state['map_center'] = (37.5665, 126.9780)
@@ -298,165 +318,122 @@ def main():
     if 'user_persona' not in st.session_state: st.session_state['user_persona'] = None
     if 'user_district' not in st.session_state: st.session_state['user_district'] = '전체 (All)'
 
-    # Load Data
-    df_oy = load_data('oliveyoung_best_integrated.csv')
+    df_oy = load_data('oliveyoung_best_integrated_with_images.csv')
     df_daiso = load_data('daiso_march_best.csv')
-    df_tour = load_data('last_tour_final_mapped.csv')  # Super dataset for everything!
+    df_tour = load_data('last_tour_final_mapped.csv')
     df_stores = load_data('seoul_cosmetic.csv')
 
-    # Create 5 TABS
     t_quiz, t_my_tour, t_home, t_cosmo, t_tourist = st.tabs([
         "🧠 PERSONA QUIZ", "🗺️ MY PERSONA MAP", "🏠 TODAY BEST", "💄 COSMETICS", "📍 ALL TOURIST MAP"
     ])
 
-    # ---------------- TAB 1: PERSONA QUIZ ----------------
     with t_quiz:
         st.markdown("<h2 class='quiz-title'>Find Your K-Beauty Persona & Area</h2>", unsafe_allow_html=True)
-        
         st.markdown("<div class='quiz-card'>", unsafe_allow_html=True)
         with st.form("persona_quiz_form"):
             st.markdown("<div class='quiz-title' style='font-size:1.1em;'>Q1. K-뷰티 장품 선택 기준 (Purchase Priority)</div>", unsafe_allow_html=True)
             q1 = st.radio("", [
-                "[A] 강력하고 확실한 프리미엄 기술력 (확실한 효과) / Premium technology",
-                "[B] 매일 발라도 자극 없이 편안하고 순한 데일리 수분 / Daily moisture",
-                "[C] 가볍고 산뜻하게 모공과 열감을 잡아주는 제품 / Pore & cooling",
-                "[D] 성분이 증명되고 체계적인 기능과 루틴 / Scientifically proven",
-                "[E] 장벽부터 톤업까지 하나로 끝내는 고효율 솔루션 / Multitasking care"
+                "[A] 강력하고 확실한 프리미엄 기술력 / Premium technology",
+                "[B] 데일리 수분 케어 / Daily moisture",
+                "[C] 가벼운 모공 & 쿨링 / Pore & cooling",
+                "[D] 성분이 확실한 기능성 / Scientifically proven",
+                "[E] 멀티태스킹 / Multitasking care"
             ], label_visibility="collapsed")
-            
             st.markdown("<hr><div class='quiz-title' style='font-size:1.1em;'>Q2. 이상적인 서울 여행 스타일 (Travel Style)</div>", unsafe_allow_html=True)
             q2 = st.radio("", [
-                "[A] 화려한 백화점 쇼핑 & 럭셔리 실내 스팟 / Luxury indoor",
-                "[B] 트렌디한 시장, 팝업스토어 / Trendy pop-up stores",
-                "[C] 고궁과 활기찬 야외 액티비티 / Palaces & Activities",
-                "[D] 전시관이나 자연 속 한적한 시간 / Quiet galleries & Nature"
+                "[A] 럭셔리 실내 스팟 / Luxury indoor",
+                "[B] 트렌디한 시장, 팝업 / Trendy pop-up",
+                "[C] 고궁 & 액티비티 / Palaces & Activities",
+                "[D] 한적한 갤러리 & 자연 / Quiet galleries & Nature"
             ], label_visibility="collapsed")
-            
             st.markdown("<hr><div class='quiz-title' style='font-size:1.1em;'>Q3. 완성하고 싶은 피부 (Skin Goal)</div>", unsafe_allow_html=True)
-            q3 = st.radio("", [
-                "[A] 늘어짐 없이 탱탱한 밀도 [고밀도 윤광 피부]",
-                "[B] 속부터 편안하고 맑은 [투명 물광 피부]",
-                "[C] 번들거림 없이 매끄러운 [클리어 보송 피부]",
-                "[D] 잡티 없이 튼튼하게 빛나는 [건강 브라이트닝 피부]",
-                "[E] 단숨에 만들어내는 [단기 효율 톤업 피부]"
-            ], label_visibility="collapsed")
-
+            q3 = st.radio("", ["[A] 윤광", "[B] 물광", "[C] 보송", "[D] 건강", "[E] 톤업"], label_visibility="collapsed")
             st.markdown("<hr><div class='quiz-title' style='font-size:1.1em;'>Q4. 선호 자치구 (District)</div>", unsafe_allow_html=True)
             user_district_choice = st.selectbox("", SEOUL_DISTRICTS, label_visibility="collapsed")            
             submitted = st.form_submit_button("✨ 진단결과 확인 (Analyze Persona)")
-            
         st.markdown("</div>", unsafe_allow_html=True)
 
         if submitted:
             st.session_state['user_district'] = user_district_choice.split(" (")[0]
             scores = {'중국':0, '일본':0, '대만':0, '미국':0, '홍콩':0}
-            
             if "[A]" in q1: scores['중국'] += 2
             elif "[B]" in q1: scores['일본'] += 2
             elif "[C]" in q1: scores['대만'] += 2
             elif "[D]" in q1: scores['미국'] += 2
             elif "[E]" in q1: scores['홍콩'] += 2
-            
             if "[A]" in q2: scores['중국'] += 1; scores['홍콩'] += 1
             elif "[B]" in q2: scores['대만'] += 1
             elif "[C]" in q2: scores['미국'] += 1
             elif "[D]" in q2: scores['일본'] += 1
-
             if "[A]" in q3: scores['중국'] += 1
             elif "[B]" in q3: scores['일본'] += 1
             elif "[C]" in q3: scores['대만'] += 1
             elif "[D]" in q3: scores['미국'] += 1
             elif "[E]" in q3: scores['홍콩'] += 1
-            
             best_persona = max(scores, key=scores.get)
             st.session_state['user_persona'] = best_persona
-            
             st.markdown(f"""
                 <div class='persona-result'>
                     <h1>당신의 K-뷰티 페르소나 (Your Persona)</h1>
                     <h2 style='font-size:35px; margin:20px 0;'>{PERSONA_INFO[best_persona][0]}</h2>
                     <p style='font-size:18px;'><i>"{PERSONA_INFO[best_persona][1]}"</i></p>
                     <p style="margin-top:20px; font-weight: 700;">추천 자치구: {st.session_state['user_district']}</p>
-                    <p><b>[MY PERSONA MAP] 탭을 클릭하여 추천 관광지 및 맞춤 일정을 확인하세요!</b></p>
+                    <p><b>🔍 [Must-buy Items for You]</b></p>
                 </div>
             """, unsafe_allow_html=True)
+            must_buy_items = PERSONA_PRODUCTS.get(best_persona, [])
+            if must_buy_items:
+                st.markdown("<div style='margin-top:20px;'></div>", unsafe_allow_html=True)
+                cols = st.columns(len(must_buy_items))
+                for idx, item in enumerate(must_buy_items):
+                    with cols[idx]:
+                        # Check for local image first
+                        img_path = find_image_path(item, 'oliveyoung') or find_image_path(item, 'daiso')
+                        img_base64 = get_base64_img(img_path)
+                        
+                        # Fallback to online image from CSV if not found locally
+                        online_url = None
+                        if not img_base64:
+                            search_df = df_oy[df_oy['상품명'].str.contains(item, na=False)] if not df_oy.empty else pd.DataFrame()
+                            if search_df.empty and not df_daiso.empty:
+                                search_df = df_daiso[df_daiso['goods_name'].str.contains(item, na=False)]
+                                if not search_df.empty: online_url = search_df.iloc[0].get('image_url')
+                            elif not search_df.empty:
+                                online_url = search_df.iloc[0].get('image_url')
+                        
+                        img_tag = f'<img src="data:image/jpeg;base64,{img_base64}" class="product-img">' if img_base64 else \
+                                  (f'<img src="{online_url}" class="product-img">' if online_url else \
+                                   '<div class="product-img" style="background:#eee; line-height:100px; font-size:10px;">No Image</div>')
+                        
+                        st.markdown(f'<div class="product-card" style="height:200px;">{img_tag}<div class="product-title" style="margin-top:10px;font-size:0.8rem;">{item}</div></div>', unsafe_allow_html=True)
+            st.markdown("<div style='margin-top:40px; text-align:center;'>", unsafe_allow_html=True)
+            if st.button("🗺️ MY PERSONA MAP으로 이동", use_container_width=True):
+                components.html('<script>window.parent.document.querySelectorAll(\'button[data-baseweb="tab"]\')[1].click();</script>', height=0)
+            st.markdown("</div>", unsafe_allow_html=True)
 
-    # ---------------- TAB 2: MY PERSONA MAP ----------------
     with t_my_tour:
         st.markdown("<h2>🗺️ MY PERSONA TOUR MAP</h2>", unsafe_allow_html=True)
         persona = st.session_state.get('user_persona')
         cur_district = st.session_state.get('user_district', '전체')
-
         if not persona:
-            st.warning("⚠️ PERSONA QUIZ 탭에서 퀴즈를 완료해주세요! (Complete the quiz first!)")
+            st.warning("⚠️ PERSONA QUIZ 탭에서 퀴즈를 완료해주세요!")
         else:
-            st.info(f"선택된 페르소나: **{PERSONA_INFO[persona][0]}** | 추천 지역: **{cur_district}**")
-            
-            if df_tour.empty:
-                st.error("관광지 데이터가 없습니다.")
-            else:
-                df_rec = df_tour[df_tour['K뷰티_추천_페르소나'].astype(str).str.contains(persona, na=False)]
-                if cur_district != '전체' and cur_district != '전체 (All)':
-                    df_rec_gu = df_rec[df_rec['시/군/구'].astype(str).str.contains(cur_district, na=False)]
-                    if len(df_rec_gu) > 0:
-                        df_rec = df_rec_gu
-                    else:
-                        st.info("선택하신 자치구에 맞춤 관광지가 조금 부족하여 서울 전역에서 추천합니다.")
-                        
-                df_rec = df_rec.sort_values(by='검색건수', ascending=False, na_position='last').head(40)
-                
-                map_data = []
-                for _, row in df_rec.iterrows():
-                    cd = row.get('area_cd')
-                    cong_info = get_seoul_city_data(cd)
-                    map_data.append({
-                        'name': row['관광지명'],
-                        'category': row['소분류 카테고리'],
-                        'district': row['시/군/구'],
-                        'lat': row['lat'],
-                        'lng': row['lng'],
-                        'congestion_lvl': cong_info['lvl']
-                    })
-                
-                st.markdown(f"**라이프스타일 맞춤 관광지 {len(map_data)}곳**")
-                render_folium_map_persona(map_data)
+            st.info(f"페르소나: **{PERSONA_INFO[persona][0]}** | 지역: **{cur_district}**")
+            df_rec = df_tour[df_tour['K뷰티_추천_페르소나'].astype(str).str.contains(persona, na=False)]
+            if cur_district not in ['전체', '전체 (All)']:
+                df_rec_gu = df_rec[df_rec['시/군/구'].astype(str).str.contains(cur_district, na=False)]
+                if not df_rec_gu.empty: df_rec = df_rec_gu
+            df_rec = df_rec.sort_values(by='검색건수', ascending=False, na_position='last').head(40)
+            map_data = []
+            for _, row in df_rec.iterrows():
+                cong = get_seoul_city_data(row.get('area_cd'))
+                map_data.append({
+                    'name': row['관광지명'], 'category': row['소분류 카테고리'], 'district': row['시/군/구'],
+                    'lat': row['lat'], 'lng': row['lng'], 'congestion_lvl': cong['lvl']
+                })
+            map_stores = df_stores.to_dict('records') if not df_stores.empty else []
+            render_folium_map_persona(map_data, stores=map_stores)
 
-            # Itinerary
-            st.markdown("<br><h3>🗓️ Recommended Half-Day Itinerary</h3>", unsafe_allow_html=True)
-            with st.expander("✨ 지금 바로 떠날 수 있는 '반나절 맞춤 여행 코스' 보기 (Recommended Half-Day Course)", expanded=True):
-                itinerary_data = {
-                    '중국': [
-                        "📍 오전 11:00 - 명동역 인근 올리브영 타운 방문 (프리미엄 앰플 & 기기 쇼핑) <br> (11:00 AM - Visit Olive Young Town Myeongdong for premium care shopping)",
-                        "📍 오후 13:00 - 더현대 서울 혹은 백화점 내 '무료 전시' 감상하며 인파 피하기 <br> (1:00 PM - Enjoy free exhibitions at The Hyundai Seoul or department stores)",
-                        "📍 오후 16:00 - 한강 공원이 보이는 카페에서 럭셔리한 시티뷰 즐기기 <br> (4:00 PM - Enjoy luxury city view at a Han River view cafe)"
-                    ],
-                    '일본': [
-                        "📍 오전 11:00 - 명동역 올리브영 방문 (텍스 리펀 챙기기 & 추천 마스크팩 구매) 🌿 <br> (11:00 AM - Visit Myeongdong Olive Young for tax refund & mask packs)",
-                        "📍 오후 13:00 - 햇빛과 인파를 피할 수 있는 '근처 실내 전시관(여유 상태)'에서 문화생활 ☕ <br> (1:00 PM - Cultural life at a nearby quiet indoor gallery)",
-                        "📍 오후 16:00 - 자극받은 피부를 쉬게 해주는 한적한 도심 공원 산책하기 🌳 <br> (4:00 PM - Rest your skin with a peaceful walk in a city park)"
-                    ],
-                    '대만': [
-                        "📍 오전 11:00 - 트렌디한 시장(광장시장 등)에서 가벼운 로컬 푸드 체험 <br> (11:00 AM - Local food experience at trendy markets like Gwangjang Market)",
-                        "📍 오후 13:00 - 쿨링이 필요한 피부를 위해 시원한 실내 팝업스토어 탐방 <br> (1:00 PM - Explore cool indoor pop-up stores for skin cooling)",
-                        "📍 오후 16:00 - 모공 케어 아이템 장착 후 남산공원의 선선한 바람 쐬기 <br> (4:00 PM - Enjoy cool breeze at Namsan Park after pore care shopping)"
-                    ],
-                    '미국': [
-                        "📍 오전 11:00 - 성수동 팝업스토어에서 가장 핫한 신상 글로우 제품 테스트 <br> (11:00 AM - Test hot new glow products at Seongsu-dong pop-ups)",
-                        "📍 오후 13:00 - 힙한 대형 카페나 쇼핑 센터에서 숏폼 촬영하기 <br> (1:00 PM - Film short-form videos at hip grand cafes or malls)",
-                        "📍 오후 16:00 - 액티비티가 어우러진 복합 문화 공간에서 에너지 충전 <br> (4:00 PM - Recharge energy at complex cultural spaces with activities)"
-                    ],
-                    '홍콩': [
-                        "📍 오전 11:00 - 올인원 멀티밤 구매 후 동대문 복합 쇼핑 타워 정복 <br> (11:00 AM - Conquer Dongdaemun shopping towers with all-in-one balm)",
-                        "📍 오후 13:00 - 짧은 시간 내에 고효율로 즐기는 공연 혹은 미디어 아트 관람 <br> (1:00 PM - Enjoy high-efficiency performances or media art)",
-                        "📍 오후 16:00 - 환급 키오스크에서 세금 환급 후 청계천 밤도깨비 야시장 산책 <br> (4:00 PM - Walk along Cheonggyecheon after tax refund at a kiosk)"
-                    ]
-                }
-                
-                selected_itinerary = itinerary_data.get(persona, itinerary_data['일본'])
-                for step in selected_itinerary:
-                    st.markdown(f"**{step}**", unsafe_allow_html=True)
-
-    # ---------------- TAB 3: TODAY BEST (HOME) ----------------
     with t_home:
         f1, f2 = st.columns(2)
         with f1:
@@ -468,27 +445,13 @@ def main():
 
         st.markdown("<h3 style='margin-bottom:20px;'>🔥 Brand Best 5</h3>", unsafe_allow_html=True)
         c1, c2 = st.columns(2)
-        
-        brand_params = [
-            ('oliveyoung', df_oy, '상품명', '할인 가격', c1),
-            ('daiso', df_daiso, 'goods_name', 'price', c2)
-        ]
-        
+        brand_params = [('oliveyoung', df_oy, '상품명', '할인 가격', c1), ('daiso', df_daiso, 'goods_name', 'price', c2)]
         for brand, df, name_col, price_col, col in brand_params:
             with col:
                 st.markdown(f"<div class='glass-card'><h4>{brand.upper()} Bestsellers</h4>", unsafe_allow_html=True)
-                if df.empty:
-                    st.warning("No data")
-                else:
-                    if sel_cos_cat != "All":
-                        cat_col = '카테고리 이름' if brand == 'oliveyoung' else 'category'
-                        if cat_col in df.columns:
-                            df_filtered = df[df[cat_col].str.contains(sel_cos_cat, na=False)]
-                        else:
-                            df_filtered = df # Fallback
-                    else: 
-                        df_filtered = df
-                    
+                if not df.empty:
+                    cat_col = '카테고리 이름' if brand == 'oliveyoung' else 'category'
+                    df_filtered = df[df[cat_col].str.contains(sel_cos_cat, na=False)] if sel_cos_cat != "All" else df
                     best_5 = df_filtered.head(5)
                     sub_cols = st.columns(5)
                     for i, (_, row) in enumerate(best_5.iterrows()):
@@ -497,111 +460,50 @@ def main():
                             price = int(row.get(price_col, 0)) if pd.notna(row.get(price_col)) else 0
                             img_path = find_image_path(name, brand)
                             img_base64 = get_base64_img(img_path)
-                            
-                            if img_base64:
-                                img_tag = f'<img src="data:image/jpeg;base64,{img_base64}" class="product-img">'
-                            else:
-                                remote_url = get_oy_image_url(row.get('url', '')) if brand == 'oliveyoung' else row.get('image_url', '')
-                                if remote_url:
-                                    img_tag = f'<img src="{remote_url}" class="product-img">'
-                                else:
-                                    img_tag = '<div class="product-img" style="background:#eee; line-height:100px; font-size:10px;">No Image</div>'
-                            
+                            img_tag = f'<img src="data:image/jpeg;base64,{img_base64}" class="product-img">' if img_base64 else \
+                                      f'<img src="{row.get("image_url", "")}" class="product-img">'
                             st.markdown(f'<div class="product-card">{img_tag}<div class="product-title">{name}</div><div class="product-price">{price:,}원</div></div>', unsafe_allow_html=True)
                 st.markdown("</div>", unsafe_allow_html=True)
 
-        # Tourist Best 10 Summary
-        st.markdown("<h3 style='margin-top:40px;'>📍 Tourist Best 10 Shortcuts</h3>", unsafe_allow_html=True)
-        if not df_tour.empty:
-            tour_filtered = df_tour.copy()
-            if sel_tour_cat != "All":
-                tour_filtered = tour_filtered[tour_filtered['중분류 카테고리'] == sel_tour_cat]
-            top_10 = tour_filtered.head(10)
-            
-            t_subcols = st.columns(5)
-            for i, (_, r) in enumerate(top_10.iterrows()):
-                congest = get_seoul_city_data(r.get('area_cd'))['lvl']
-                with t_subcols[i % 5]:
-                    st.markdown(f'<div class="glass-card" style="padding:10px;text-align:center;"><div style="font-weight:700;font-size:13px;">{r["관광지명"]}</div><div style="font-size:11px;color:#F93780;">{congest}</div></div>', unsafe_allow_html=True)
-
-
-    # ---------------- TAB 4: COSMETICS ----------------
     with t_cosmo:
         st.markdown("<h2 style='text-align:center;'>💄 K-Beauty Trend Search</h2>", unsafe_allow_html=True)
         bc1, bc2 = st.columns(2)
-        brand_info = [('oliveyoung', df_oy, bc1), ('daiso', df_daiso, bc2)]
-        
-        for brand, df, bcol in brand_info:
+        for brand, df, bcol in [('oliveyoung', df_oy, bc1), ('daiso', df_daiso, bc2)]:
             with bcol:
-                st.markdown(f"### {brand.upper()} March Best 100")
-                if df.empty:
-                    st.warning("Data not available.")
-                    continue
-                name_col, price_col = ('상품명', '할인 가격') if brand == 'oliveyoung' else ('goods_name', 'price')
-                show_full = st.session_state.get(f'{brand}_more', False)
-                items = df.head(100 if show_full else 3)
-                grid_cols = st.columns(3) 
-                for i, (_, row) in enumerate(items.iterrows()):
-                    with grid_cols[i % 3]:
-                        name = row.get(name_col, 'Unknown')
-                        price = int(row.get(price_col, 0)) if pd.notna(row.get(price_col)) else 0
-                        img_path = find_image_path(name, brand)
-                        img_base64 = get_base64_img(img_path)
-                        img_tag = f'<img src="data:image/jpeg;base64,{img_base64}" class="product-img">' if img_base64 else \
-                                f'<img src="{get_oy_image_url(row.get("url", "")) if brand=="oliveyoung" else row.get("image_url", "")}" class="product-img">'
-                        
-                        st.markdown(f'<div class="product-card"><div class="best-label">TOP {i+1}</div>{img_tag}<div class="product-title" style="font-size:0.7rem;">{name}</div><div class="product-price" style="font-size:0.8rem;">{price:,}원</div></div>', unsafe_allow_html=True)
-                
-                if not show_full:
-                    if st.button(f"View All {brand.upper()} List", key=f"btn_{brand}"):
-                        st.session_state[f'{brand}_more'] = True
-                        st.rerun()
-                else:
-                    if st.button("Hide Full List", key=f"hide_{brand}"): st.session_state[f'{brand}_more'] = False; st.rerun()
+                st.markdown(f"### {brand.upper()} Best 100")
+                if not df.empty:
+                    name_col, price_col = ('상품명', '할인 가격') if brand == 'oliveyoung' else ('goods_name', 'price')
+                    show_full = st.session_state.get(f'{brand}_more', False)
+                    items = df.head(100 if show_full else 3)
+                    grid_cols = st.columns(3)
+                    for i, (_, row) in enumerate(items.iterrows()):
+                        with grid_cols[i % 3]:
+                            name = row.get(name_col, 'Unknown')
+                            price = int(row.get(price_col, 0)) if pd.notna(row.get(price_col)) else 0
+                            img_path = find_image_path(name, brand)
+                            img_base64 = get_base64_img(img_path)
+                            img_tag = f'<img src="data:image/jpeg;base64,{img_base64}" class="product-img">' if img_base64 else \
+                                      f'<img src="{row.get("image_url", "")}" class="product-img">'
+                            st.markdown(f'<div class="product-card"><div class="best-label">TOP {i+1}</div>{img_tag}<div class="product-title">{name}</div><div class="product-price">{price:,}원</div></div>', unsafe_allow_html=True)
+                    if st.button(f"View All {brand.upper()}", key=f"btn_{brand}"):
+                        st.session_state[f'{brand}_more'] = not show_full; st.rerun()
 
-    # ---------------- TAB 5: ALL TOURIST MAP ----------------
     with t_tourist:
-        st.markdown("<h2>📍 All Seoul Unified Tourist Map</h2>", unsafe_allow_html=True)
-        if df_tour.empty:
-            st.error("No Tourist Data.")
-        else:
-            col_f1, col_f2 = st.columns([1, 2.5])
-            with col_f1:
-                st.markdown("#### 🔍 Search by District")
-                gu_col = next((c for c in df_tour.columns if '시/군/구' in c), '시/군/구')
-                gu_list = sorted([str(x) for x in df_tour[gu_col].unique() if pd.notnull(x)])
-                sel_gu = st.selectbox("Select District", ["All"] + gu_list, key="sel_gu_all")
-                
-                cat_col = next((c for c in df_tour.columns if '중분류' in c), '중분류 카테고리')
-                cat_list = sorted([str(x) for x in df_tour[cat_col].unique() if pd.notnull(x)])
-                sel_cat = st.multiselect("Category Filter", cat_list, key="sel_cat_all")
-                
-                gu_data = df_tour.copy()
-                if sel_gu != "All": gu_data = gu_data[gu_data[gu_col] == sel_gu]
-                if sel_cat: gu_data = gu_data[gu_data[cat_col].isin(sel_cat)]
-
-                st.markdown("---")
-                st.markdown(f"#### 🏆 Ranked Places ({len(gu_data)} places found)")
-                st.info("💡 Click name in the left to focus on Map.")
-                
-                display_items = gu_data.sort_values(by='검색건수', ascending=False, na_position='last').head(15)
-                for i, (_, row) in enumerate(display_items.iterrows()):
-                    congest = get_seoul_city_data(row.get('area_cd'))['lvl']
-                    btn_lbl = f"{i+1}. {row['관광지명']} | {congest} | {row['소분류 카테고리']}"
-                    if st.button(btn_lbl, key=f"btn_all_{row['관광지명']}_{i}"):
-                        if pd.notna(row['lat']) and pd.notna(row['lng']):
-                            st.session_state['map_center'] = (float(row['lat']), float(row['lng']))
-                            st.session_state['map_zoom'] = 4
-                        st.rerun()
-
-            with col_f2:
-                map_stores = df_stores.to_dict('records') if not df_stores.empty else []
-                map_tour_items = []
-                for _, r in gu_data.head(50).iterrows():
-                    congest = get_seoul_city_data(r.get('area_cd'))['lvl']
-                    map_tour_items.append({'lat': r['lat'], 'lng': r['lng'], 'name': r['관광지명'], 'lvl': congest})
-                render_map_unified(map_tour_items, stores=map_stores, height=650, zoom=st.session_state['map_zoom'], center=st.session_state['map_center'])
-
+        st.markdown("<h2>📍 Seoul Unified Tourist Map</h2>", unsafe_allow_html=True)
+        col_f1, col_f2 = st.columns([1, 2.5])
+        with col_f1:
+            gu_list = sorted([str(x) for x in df_tour['시/군/구'].unique() if pd.notnull(x)])
+            sel_gu = st.selectbox("Select District", ["All"] + gu_list, key="sel_all_gu")
+            gu_data = df_tour[df_tour['시/군/구'] == sel_gu] if sel_gu != "All" else df_tour
+            st.markdown(f"**{len(gu_data)} places found**")
+            display_items = gu_data.sort_values(by='검색건수', ascending=False).head(15)
+            for i, (_, row) in enumerate(display_items.iterrows()):
+                if st.button(f"{i+1}. {row['관광지명']}", key=f"tour_{i}"):
+                    st.session_state['map_center'] = (float(row['lat']), float(row['lng'])); st.rerun()
+        with col_f2:
+            map_stores = df_stores.to_dict('records') if not df_stores.empty else []
+            map_tour_items = [{'lat': r['lat'], 'lng': r['lng'], 'name': r['관광지명']} for _, r in gu_data.head(50).iterrows()]
+            render_map_unified(map_tour_items, stores=map_stores, height=650, center=st.session_state['map_center'])
 
 if __name__ == "__main__":
     main()
