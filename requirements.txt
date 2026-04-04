@@ -1,0 +1,9 @@
+streamlit
+pandas
+requests
+python-dotenv
+folium
+streamlit-folium
+koreanize-matplotlib
+matplotlib
+seaborn
