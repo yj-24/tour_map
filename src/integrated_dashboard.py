@@ -76,12 +76,21 @@ def inject_custom_css():
 
 # --- 3. Data Utilities ---
 def safe_read_csv(path, **kwargs):
+    if not os.path.exists(path):
+        st.error(f"❌ 파일을 찾을 수 없습니다: {path}")
+        return pd.DataFrame()
+        
     for enc in ['utf-8-sig', 'utf-8', 'cp949']:
         try:
             df = pd.read_csv(path, encoding=enc, **kwargs)
             df.columns = [str(c).strip().replace('\ufeff', '') for c in df.columns]
             return df
-        except: continue
+        except Exception as e:
+            if isinstance(e, UnicodeDecodeError): continue
+            st.error(f"⚠️ CSV 로딩 에러 ({path}): {e}")
+            return pd.DataFrame()
+            
+    st.error(f"⚠️ 지원하는 인코딩으로 파일을 읽을 수 없습니다: {path}")
     return pd.DataFrame()
 
 @st.cache_data
@@ -500,7 +509,10 @@ def main():
                 map_stores = df_stores_filtered.to_dict('records') if not df_stores_filtered.empty else []
                 render_folium_map_persona(map_data, stores=map_stores)
             else:
-                st.error("데이터에 추천 페르소나 정보가 존재하지 않습니다. CSV 파일 로딩을 확인해주세요.")
+                if df_tour.empty:
+                    st.error("데이터 프레임이 비어있습니다. CSV 파일이 제대로 로딩되지 않았습니다. 파일 경로와 업로드 상태를 확인하세요.")
+                else:
+                    st.error(f"데이터에 'K-Beauty_추천_페르소나' 컬럼이 존재하지 않습니다.\n현재 파일에 존재하는 컬럼 목록: {df_tour.columns.tolist()}")
             
             # --- Added Section: Itinerary ---
             st.markdown("<hr>", unsafe_allow_html=True)
