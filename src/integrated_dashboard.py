@@ -288,7 +288,7 @@ def render_folium_map_persona(locations, stores=None, height=650, level=12, cent
             stores.forEach(function(s) {{
                 var icon = L.icon({{ iconUrl: ICON_URLS[s.brand] || ICON_URLS['정보없음'], iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -32] }});
                 var marker = L.marker(s.pos, {{ icon: icon, title: s.title }}).addTo(map);
-                var content = '<div style="padding:5px;min-width:150px;font-family:pretendard;"><b>[' + s.brand.toUpperCase() + '] ' + s.title + '</b><br><span style="color:#00b894;font-size:11px;">K-뷰티 쇼핑은 여기서!</span></div>';
+                var content = '<div style="padding:5px;min-width:150px;font-family:pretendard;"><b>[' + s.brand.toUpperCase() + '] ' + s.title + '</b><br><span style="color:#00b894;font-size:11px;">K-Beauty 쇼핑은 여기서!</span></div>';
                 marker.bindPopup(content);
                 group.addLayer(marker);
                 marker.on('mouseover', function(e) {{ this.openPopup(); }});
@@ -376,7 +376,7 @@ def main():
                 "[E] 장벽부터 톤업까지 하나로 끝내는 고효율 멀티 솔루션 / High-efficiency multitasking care"
             ], label_visibility="collapsed")
             
-            st.markdown("<hr><div class='quiz-title'>Q2. K-뷰티 쇼핑으로 완성하고 싶은 당신의 피부 상태는? <br>(What is your desired skin condition after K-Beauty shopping?)</div>", unsafe_allow_html=True)
+            st.markdown("<hr><div class='quiz-title'>Q2. K-Beauty 쇼핑으로 완성하고 싶은 당신의 피부 상태는? <br>(What is your desired skin condition after K-Beauty shopping?)</div>", unsafe_allow_html=True)
             q3 = st.radio("Skin Goal", [
                 "[A] 늘어짐 없이 탱탱한 밀도를 가진 [고밀도 윤광 피부] / Firm and radiant [High-density glow]",
                 "[B] 수분을 머금어 속부터 편안하고 맑은 [투명 물광 피부] / Clear and moisturized [Transparent water-glow]",
@@ -418,7 +418,7 @@ def main():
             st.session_state['user_persona'] = best_persona
             st.markdown(f"""
                 <div class='persona-result'>
-                    <h1>당신의 K-뷰티 페르소나 (Your Persona)</h1>
+                    <h1>당신의 K-Beauty 페르소나 (Your Persona)</h1>
                     <h2 style='font-size:35px; margin:20px 0;'>{PERSONA_INFO[best_persona][0]}</h2>
                     <p style='font-size:18px;'><i>"{PERSONA_INFO[best_persona][1]}"</i></p>
                     <p style="margin-top:20px; font-weight: 700;">추천 자치구: {st.session_state['user_district']}</p>
@@ -476,7 +476,7 @@ def main():
             # Extract district name (e.g. "중구" from "중구 (Jung-gu)")
             d_name = cur_district.split(' ')[0] if ' ' in cur_district else cur_district
             
-            df_rec = df_tour[df_tour['K뷰티_추천_페르소나'].astype(str).str.contains(persona, na=False)]
+            df_rec = df_tour[df_tour['K-Beauty_추천_페르소나'].astype(str).str.contains(persona, na=False)]
             if d_name != "전체":
                 df_rec_gu = df_rec[df_rec['시/군/구'].astype(str).str.contains(d_name, na=False)]
                 if not df_rec_gu.empty: df_rec = df_rec_gu
