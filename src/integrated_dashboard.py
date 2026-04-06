@@ -78,7 +78,9 @@ def inject_custom_css():
 def safe_read_csv(path, **kwargs):
     for enc in ['utf-8-sig', 'utf-8', 'cp949']:
         try:
-            return pd.read_csv(path, encoding=enc, **kwargs)
+            df = pd.read_csv(path, encoding=enc, **kwargs)
+            df.columns = [str(c).strip().replace('\ufeff', '') for c in df.columns]
+            return df
         except: continue
     return pd.DataFrame()
 
@@ -368,7 +370,7 @@ def main():
         st.markdown("<div class='quiz-card'>", unsafe_allow_html=True)
         with st.form("persona_quiz_form"):
             st.markdown("<div class='quiz-title' style='font-size:1.1em;'>Q1. K-Beauty 화장품 선택 기준은 무엇인가요?</div>", unsafe_allow_html=True)
-            q1 = st.radio("", [
+            q1 = st.radio("Purchase Priority", [
                 "[A] 강력하고 확실한 프리미엄 기술력 (확실한 효과) / Premium technology (Clear results)",
                 "[B] 매일 발라도 자극 없이 편안하고 순한 데일리 수분 / Daily moisture without irritation",
                 "[C] 가볍고 산뜻하게 모공과 열감을 잡아주는 제품 / Pore & cooling with light finish",
@@ -393,7 +395,7 @@ def main():
                 "[D] 전시관이나 자연 속에서 차분하게 시간 보내기 / Quiet galleries & Nature"
             ])
             st.markdown("<hr><div class='quiz-title' style='font-size:1.1em;'>Q4. 선호 자치구 (District)</div>", unsafe_allow_html=True)
-            user_district_choice = st.selectbox("", SEOUL_DISTRICTS, label_visibility="collapsed")            
+            user_district_choice = st.selectbox("Preferred District", SEOUL_DISTRICTS, label_visibility="collapsed")            
             submitted = st.form_submit_button("✨ 진단결과 확인 (Analyze Persona)")
         st.markdown("</div>", unsafe_allow_html=True)
 
