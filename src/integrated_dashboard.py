@@ -124,6 +124,16 @@ def get_oy_image_url(product_url):
     return None
 
 def find_image_path(product_name, brand):
+    # --- 수동 매핑 (Custom Image overrides) ---
+    p_name_norm = str(product_name).strip().replace(" ", "")
+    if "라로슈포제" in p_name_norm and ("시카" in p_name_norm or "밤" in p_name_norm):
+        custom_path = os.path.join(TOUR_IMG_DIR, '라로슈퍼시카밤.jpg')
+        if os.path.exists(custom_path): return custom_path
+    if "코스알엑스" in p_name_norm and "패드" in p_name_norm:
+        custom_path = os.path.join(TOUR_IMG_DIR, 'image (1).png')
+        if os.path.exists(custom_path): return custom_path
+
+    # --- 기존 매핑 로직 ---
     folder = 'oliveyoung_best' if brand == 'oliveyoung' else 'daiso_beauty_best'
     target_dir = os.path.join(TOUR_IMG_DIR, folder)
     if not os.path.exists(target_dir): return None
@@ -132,6 +142,21 @@ def find_image_path(product_name, brand):
         if name_norm in unicodedata.normalize('NFC', f).replace(' ', ''):
             return os.path.join(target_dir, f)
     return None
+
+@st.cache_data(ttl=600)
+def get_congestion_data(location_id):
+    if not location_id or not SEOUL_CITY_DATA_API_KEY: return {"lvl": "정보없음", "color": "#B2BEC3"}
+    url = f"http://openapi.seoul.go.kr:8088/{SEOUL_CITY_DATA_API_KEY}/xml/citydata/1/5/{location_id}"
+    try:
+        res = requests.get(url)
+        root = ET.fromstring(res.content)
+        stts = root.find(".//LIVE_PPLTN_STTS/LIVE_PPLTN_STTS")
+        if stts is not None:
+            lvl = stts.findtext("AREA_CONGEST_LVL")
+            colors = {"여유": "#00B894", "보통": "#6C5CE7", "약간 붐빔": "#E17055", "붐빔": "#D63031"}
+            return {"lvl": lvl, "color": colors.get(lvl, "#B2BEC3")}
+    except: pass
+    return {"lvl": "정보없음", "color": "#B2BEC3"}
 
 @st.cache_data(ttl=600)
 def get_seoul_city_data(location_id):
@@ -563,6 +588,49 @@ def main():
                             st.markdown(f'<div class="product-card">{img_tag}<div class="product-title">{name}</div><div class="product-price">{price:,}원</div></div>', unsafe_allow_html=True)
                 st.markdown("</div>", unsafe_allow_html=True)
 
+        # Tourist Top 10 + Map
+        st.markdown("<h3 style='margin-top:40px;'>📍 Tourist Best 10 & Map</h3>", unsafe_allow_html=True)
+        gc = st.container()
+        with gc:
+            l_col, r_col = st.columns([1, 2])
+            with l_col:
+                tour_filtered = df_tour.copy()
+                if sel_tour_cat != "All":
+                    tour_filtered = tour_filtered[tour_filtered['중분류 카테고리'] == sel_tour_cat]
+                top_10 = tour_filtered.sort_values(by='검색건수', ascending=False, na_position='last').head(10)
+                
+                if 'today_map_center' not in st.session_state:
+                    avg_lat = top_10['lat'].mean() if not top_10.empty else 37.5665
+                    avg_lng = top_10['lng'].mean() if not top_10.empty else 126.9780
+                    st.session_state['today_map_center'] = (avg_lat, avg_lng)
+                if 'today_map_zoom' not in st.session_state: st.session_state['today_map_zoom'] = 11
+                if 'prev_sel_tour_cat' not in st.session_state: st.session_state['prev_sel_tour_cat'] = "All"
+                
+                # Auto center on category change
+                if st.session_state['prev_sel_tour_cat'] != sel_tour_cat:
+                    st.session_state['prev_sel_tour_cat'] = sel_tour_cat
+                    if not top_10.empty:
+                        st.session_state['today_map_center'] = (top_10['lat'].mean(), top_10['lng'].mean())
+                        st.session_state['today_map_zoom'] = 12
+                
+                st.markdown("<p style='font-size:0.7rem; color:#888; margin-bottom:10px;'>Click name to zoom (100m).</p>", unsafe_allow_html=True)
+                for i, (_, row) in enumerate(top_10.iterrows()):
+                    congest = get_congestion_data(row.get('area_cd'))
+                    btn_lbl = f"{i+1}. {row['관광지명']} | {congest['lvl']} | {row['소분류 카테고리']}"
+                    if st.button(btn_lbl, key=f"btn_h_{i}_{row['관광지명']}"):
+                        st.session_state['today_map_center'] = (float(row['lat']), float(row['lng']))
+                        st.session_state['today_map_zoom'] = 15
+                        st.rerun()
+
+            with r_col:
+                map_locs = []
+                for _, r in top_10.iterrows():
+                    congest = get_congestion_data(r.get('area_cd'))
+                    map_locs.append({'lat': r['lat'], 'lng': r['lng'], 'name': r['관광지명'], 'lvl': congest['lvl']})
+                
+                # Use Folium unified renderer directly since Kakao map API key could be missing
+                render_map_unified(map_locs, stores=None, height=450, center=st.session_state['today_map_center'], zoom=st.session_state['today_map_zoom'])
+
     with t_cosmo:
         st.markdown("<h2 style='text-align:center;'>💄 K-Beauty Trend Search</h2>", unsafe_allow_html=True)
         bc1, bc2 = st.columns(2)
@@ -604,12 +672,27 @@ def main():
                 df_filtered = df_filtered[df_filtered['시/군/구'] == sel_gu]
             if sel_cat != "All":
                 df_filtered = df_filtered[df_filtered['중분류 카테고리'] == sel_cat]
+                
+            # [자동 위치 이동 로직 추가]
+            if 'last_gu' not in st.session_state: st.session_state['last_gu'] = "All"
+            if 'last_cat' not in st.session_state: st.session_state['last_cat'] = "All"
+            
+            if st.session_state['last_gu'] != sel_gu or st.session_state['last_cat'] != sel_cat:
+                st.session_state['last_gu'] = sel_gu
+                st.session_state['last_cat'] = sel_cat
+                if not df_filtered.empty:
+                    # 해당 필터의 중심 좌표로 지도 이동
+                    st.session_state['map_center'] = (df_filtered['lat'].mean(), df_filtered['lng'].mean())
+                    # 전체 서울이면 넓게(11), 특정 구면 가깝게(13) 줌인
+                    st.session_state['map_zoom'] = 13 if sel_gu != "All" else 11
             
             st.markdown(f"**{len(df_filtered)} places found**")
             display_items = df_filtered.sort_values(by='검색건수', ascending=False).head(15)
             for i, (_, row) in enumerate(display_items.iterrows()):
                 if st.button(f"{i+1}. {row['관광지명']}", key=f"tour_{i}"):
-                    st.session_state['map_center'] = (float(row['lat']), float(row['lng'])); st.rerun()
+                    st.session_state['map_center'] = (float(row['lat']), float(row['lng']))
+                    st.session_state['map_zoom'] = 15  # 특정 장소 클릭 시 더 깊게 줌인!
+                    st.rerun()
         with col_f2:
             map_stores = df_stores.to_dict('records') if not df_stores.empty else []
             map_tour_items = [{'lat': r['lat'], 'lng': r['lng'], 'name': r['관광지명']} for _, r in df_filtered.head(50).iterrows()]
