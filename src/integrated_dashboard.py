@@ -84,6 +84,13 @@ def safe_read_csv(path, **kwargs):
         try:
             df = pd.read_csv(path, encoding=enc, **kwargs)
             df.columns = [str(c).strip().replace('\ufeff', '') for c in df.columns]
+            
+            # --- 호환성 처리 (Compatibility Fix) ---
+            # 깃허브에 예전 버전(K뷰티_추천_페르소나)의 CSV가 올라가 있더라도,
+            # 코드상에서 자동으로 새 이름으로 바꿔주어 에러가 발생하지 않게 함
+            if 'K뷰티_추천_페르소나' in df.columns:
+                df.rename(columns={'K뷰티_추천_페르소나': 'K-Beauty_추천_페르소나'}, inplace=True)
+                
             return df
         except Exception as e:
             if isinstance(e, UnicodeDecodeError): continue
