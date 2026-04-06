@@ -317,7 +317,7 @@ def render_folium_map_persona(locations, stores=None, height=650, level=12, cent
     components.html(html_code, height=height + 20)
 
 # B) Unified Map Renderer (General Tourist Map) - Using Folium
-def render_map_unified(locations, stores=None, center=(37.5665, 126.9780), zoom=7, height=450):
+def render_map_unified(locations, stores=None, center=(37.5665, 126.9780), zoom=11, height=450):
     m = folium.Map(location=center, zoom_start=zoom, control_scale=True)
     icons = {
         'tour': 'https://maps.google.com/mapfiles/ms/icons/green-dot.png',
@@ -352,7 +352,7 @@ def main():
     if 'oy_more' not in st.session_state: st.session_state.oy_more = False
     if 'daiso_more' not in st.session_state: st.session_state.daiso_more = False
     if 'map_center' not in st.session_state: st.session_state['map_center'] = (37.5665, 126.9780)
-    if 'map_zoom' not in st.session_state: st.session_state['map_zoom'] = 7
+    if 'map_zoom' not in st.session_state: st.session_state['map_zoom'] = 11
     if 'user_persona' not in st.session_state: st.session_state['user_persona'] = None
     if 'user_district' not in st.session_state: st.session_state['user_district'] = '전체 (All)'
 
@@ -591,7 +591,7 @@ def main():
         with col_f2:
             map_stores = df_stores.to_dict('records') if not df_stores.empty else []
             map_tour_items = [{'lat': r['lat'], 'lng': r['lng'], 'name': r['관광지명']} for _, r in df_filtered.head(50).iterrows()]
-            render_map_unified(map_tour_items, stores=map_stores, height=650, center=st.session_state['map_center'])
+            render_map_unified(map_tour_items, stores=map_stores, height=650, center=st.session_state['map_center'], zoom=st.session_state['map_zoom'])
 
 if __name__ == "__main__":
     main()
