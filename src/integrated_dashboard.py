@@ -367,7 +367,7 @@ def main():
         st.markdown("<h2 class='quiz-title'>Find Your K-Beauty Persona & Area</h2>", unsafe_allow_html=True)
         st.markdown("<div class='quiz-card'>", unsafe_allow_html=True)
         with st.form("persona_quiz_form"):
-            st.markdown("<div class='quiz-title' style='font-size:1.1em;'>Q1. K-뷰티 장품 선택 기준 (Purchase Priority)</div>", unsafe_allow_html=True)
+            st.markdown("<div class='quiz-title' style='font-size:1.1em;'>Q1. K-Beauty 화장품 선택 기준은 무엇인가요?</div>", unsafe_allow_html=True)
             q1 = st.radio("", [
                 "[A] 강력하고 확실한 프리미엄 기술력 (확실한 효과) / Premium technology (Clear results)",
                 "[B] 매일 발라도 자극 없이 편안하고 순한 데일리 수분 / Daily moisture without irritation",
@@ -376,21 +376,21 @@ def main():
                 "[E] 장벽부터 톤업까지 하나로 끝내는 고효율 멀티 솔루션 / High-efficiency multitasking care"
             ], label_visibility="collapsed")
             
-            st.markdown("<hr><div class='quiz-title'>Q2. 이상적인 서울 여행의 모습에 가장 가까운 것은? <br>(Which one best describes your ideal trip to Seoul?)</div>", unsafe_allow_html=True)
-            q2 = st.radio("Travel Style", [
-                "[A] 화려한 백화점에서 쇼핑하고, 럭셔리한 실내 스팟 즐기기 / Shopping & Luxury indoor spots",
-                "[B] 트렌디한 시장이나 팝업스토어로 리프레시 투어 / Trendy markets & Pop-up stores",
-                "[C] 고궁을 걷고 활기찬 액티비티 체험하기 / Palaces & Energetic activities",
-                "[D] 전시관이나 자연 속에서 차분하게 시간 보내기 / Quiet galleries & Nature"
-            ])
-            
-            st.markdown("<hr><div class='quiz-title'>Q3. K-뷰티 쇼핑으로 완성하고 싶은 당신의 피부 상태는? <br>(What is your desired skin condition after K-Beauty shopping?)</div>", unsafe_allow_html=True)
+            st.markdown("<hr><div class='quiz-title'>Q2. K-뷰티 쇼핑으로 완성하고 싶은 당신의 피부 상태는? <br>(What is your desired skin condition after K-Beauty shopping?)</div>", unsafe_allow_html=True)
             q3 = st.radio("Skin Goal", [
                 "[A] 늘어짐 없이 탱탱한 밀도를 가진 [고밀도 윤광 피부] / Firm and radiant [High-density glow]",
                 "[B] 수분을 머금어 속부터 편안하고 맑은 [투명 물광 피부] / Clear and moisturized [Transparent water-glow]",
                 "[C] 번들거림 없이 매끄럽고 모공이 없는 [클리어 보송 피부] / Matte and poreless [Clear matte skin]",
                 "[D] 잡티 없이 튼튼하게 빛나는 [건강 브라이트닝 피부] / Healthy and blemish-free [Brightening skin]",
                 "[E] 짧은 시간에 만들어내는 [단기 효율 톤업 피부] / Quick results [Instant tone-up]"
+            ])
+
+            st.markdown("<hr><div class='quiz-title'>Q3. 이상적인 서울 여행의 모습에 가장 가까운 것은? <br>(Which one best describes your ideal trip to Seoul?)</div>", unsafe_allow_html=True)
+            q2 = st.radio("Travel Style", [
+                "[A] 화려한 백화점에서 쇼핑하고, 럭셔리한 실내 스팟 즐기기 / Shopping & Luxury indoor spots",
+                "[B] 트렌디한 시장이나 팝업스토어로 리프레시 투어 / Trendy markets & Pop-up stores",
+                "[C] 고궁을 걷고 활기찬 액티비티 체험하기 / Palaces & Energetic activities",
+                "[D] 전시관이나 자연 속에서 차분하게 시간 보내기 / Quiet galleries & Nature"
             ])
             st.markdown("<hr><div class='quiz-title' style='font-size:1.1em;'>Q4. 선호 자치구 (District)</div>", unsafe_allow_html=True)
             user_district_choice = st.selectbox("", SEOUL_DISTRICTS, label_visibility="collapsed")            
