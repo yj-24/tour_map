@@ -85,7 +85,7 @@ def safe_read_csv(path, **kwargs):
     return pd.DataFrame()
 
 @st.cache_data
-def load_data(filename):
+def load_dashboard_data(filename):
     path = os.path.join(TOUR_DATA_DIR, filename)
     return safe_read_csv(path)
 
@@ -356,10 +356,10 @@ def main():
     if 'user_persona' not in st.session_state: st.session_state['user_persona'] = None
     if 'user_district' not in st.session_state: st.session_state['user_district'] = '전체 (All)'
 
-    df_oy = load_data('oliveyoung_best_integrated_with_images.csv')
-    df_daiso = load_data('daiso_march_best.csv')
-    df_tour = load_data('last_tour_final_mapped.csv')
-    df_stores = load_data('seoul_cosmetic.csv')
+    df_oy = load_dashboard_data('oliveyoung_best_integrated_with_images.csv')
+    df_daiso = load_dashboard_data('daiso_march_best.csv')
+    df_tour = load_dashboard_data('last_tour_final_mapped.csv')
+    df_stores = load_dashboard_data('seoul_cosmetic.csv')
 
     t_quiz, t_my_tour, t_home, t_cosmo, t_tourist = st.tabs([
         "🧠 PERSONA QUIZ", "🗺️ MY PERSONA MAP", "🏠 TODAY BEST", "💄 COSMETICS", "📍 ALL TOURIST MAP"
@@ -478,26 +478,29 @@ def main():
             # Extract district name (e.g. "중구" from "중구 (Jung-gu)")
             d_name = cur_district.split(' ')[0] if ' ' in cur_district else cur_district
             
-            df_rec = df_tour[df_tour['K-Beauty_추천_페르소나'].astype(str).str.contains(persona, na=False)]
-            if d_name != "전체":
-                df_rec_gu = df_rec[df_rec['시/군/구'].astype(str).str.contains(d_name, na=False)]
-                if not df_rec_gu.empty: df_rec = df_rec_gu
-                # Filter stores by current district (Fallback to all stores if none in district)
-                df_stores_filtered = df_stores[df_stores['주소'].str.contains(d_name, na=False)] if not df_stores.empty else df_stores
-                if df_stores_filtered.empty: df_stores_filtered = df_stores
+            if not df_tour.empty and 'K-Beauty_추천_페르소나' in df_tour.columns:
+                df_rec = df_tour[df_tour['K-Beauty_추천_페르소나'].astype(str).str.contains(persona, na=False)]
+                if d_name != "전체":
+                    df_rec_gu = df_rec[df_rec['시/군/구'].astype(str).str.contains(d_name, na=False)]
+                    if not df_rec_gu.empty: df_rec = df_rec_gu
+                    # Filter stores by current district (Fallback to all stores if none in district)
+                    df_stores_filtered = df_stores[df_stores['주소'].str.contains(d_name, na=False)] if not df_stores.empty else df_stores
+                    if df_stores_filtered.empty: df_stores_filtered = df_stores
+                else:
+                    df_stores_filtered = df_stores
+                    
+                df_rec = df_rec.sort_values(by='검색건수', ascending=False, na_position='last').head(40)
+                map_data = []
+                for _, row in df_rec.iterrows():
+                    cong = get_seoul_city_data(row.get('area_cd'))
+                    map_data.append({
+                        'name': row['관광지명'], 'category': row['소분류 카테고리'], 'district': row['시/군/구'],
+                        'lat': row['lat'], 'lng': row['lng'], 'congestion_lvl': cong['lvl']
+                    })
+                map_stores = df_stores_filtered.to_dict('records') if not df_stores_filtered.empty else []
+                render_folium_map_persona(map_data, stores=map_stores)
             else:
-                df_stores_filtered = df_stores
-                
-            df_rec = df_rec.sort_values(by='검색건수', ascending=False, na_position='last').head(40)
-            map_data = []
-            for _, row in df_rec.iterrows():
-                cong = get_seoul_city_data(row.get('area_cd'))
-                map_data.append({
-                    'name': row['관광지명'], 'category': row['소분류 카테고리'], 'district': row['시/군/구'],
-                    'lat': row['lat'], 'lng': row['lng'], 'congestion_lvl': cong['lvl']
-                })
-            map_stores = df_stores_filtered.to_dict('records') if not df_stores_filtered.empty else []
-            render_folium_map_persona(map_data, stores=map_stores)
+                st.error("데이터에 추천 페르소나 정보가 존재하지 않습니다. CSV 파일 로딩을 확인해주세요.")
             
             # --- Added Section: Itinerary ---
             st.markdown("<hr>", unsafe_allow_html=True)
