@@ -101,7 +101,7 @@ def safe_read_csv(path, **kwargs):
     return pd.DataFrame()
 
 @st.cache_data
-def load_dashboard_data(filename):
+def get_cached_data(filename):
     path = os.path.join(TOUR_DATA_DIR, filename)
     return safe_read_csv(path)
 
@@ -372,10 +372,10 @@ def main():
     if 'user_persona' not in st.session_state: st.session_state['user_persona'] = None
     if 'user_district' not in st.session_state: st.session_state['user_district'] = '전체 (All)'
 
-    df_oy = load_dashboard_data('oliveyoung_best_integrated_with_images.csv')
-    df_daiso = load_dashboard_data('daiso_march_best.csv')
-    df_tour = load_dashboard_data('last_tour_final_mapped.csv')
-    df_stores = load_dashboard_data('seoul_cosmetic.csv')
+    df_oy = get_cached_data('oliveyoung_best_integrated_with_images.csv')
+    df_daiso = get_cached_data('daiso_march_best.csv')
+    df_tour = get_cached_data('last_tour_final_mapped.csv')
+    df_stores = get_cached_data('seoul_cosmetic.csv')
 
     t_quiz, t_my_tour, t_home, t_cosmo, t_tourist = st.tabs([
         "🧠 PERSONA QUIZ", "🗺️ MY PERSONA MAP", "🏠 TODAY BEST", "💄 COSMETICS", "📍 ALL TOURIST MAP"
