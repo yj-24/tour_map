@@ -573,8 +573,9 @@ def main():
             with col:
                 st.markdown(f"<div class='glass-card'><h4>{brand.upper()} Bestsellers</h4>", unsafe_allow_html=True)
                 if not df.empty:
-                    cat_col = '카테고리 이름' if brand == 'oliveyoung' else 'category'
-                    df_filtered = df[df[cat_col].str.contains(sel_cos_cat, na=False)] if sel_cos_cat != "All" else df
+                    # 다이소 데이터도 '카테고리 이름' 컬럼을 가지고 있음 (KeyError 방지)
+                    cat_col = '카테고리 이름'
+                    df_filtered = df[df[cat_col].str.contains(sel_cos_cat, na=False)] if sel_cos_cat != "All" and cat_col in df.columns else df
                     best_5 = df_filtered.head(5)
                     sub_cols = st.columns(5)
                     for i, (_, row) in enumerate(best_5.iterrows()):
